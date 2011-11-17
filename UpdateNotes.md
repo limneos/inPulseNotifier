@@ -9,7 +9,7 @@ b) In iOS5Hooks group, all 4 methods that actually post a notification have been
 
 c) A check for iOS5 version takes place in the constructor to init the corresponding %groups.
 
-d) A function called managerDataFromBulletin creates the required data for the manager on each notification arrival and is call on each hook.
+d) A function called managerDataFromBulletin creates the required data for the manager on each notification arrival and is called on each hook.
 
 2) INAlertManager.m
 ---
