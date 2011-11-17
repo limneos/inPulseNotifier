@@ -1,9 +1,10 @@
 #import "INAlertManager.h"
-
-#import <BTstack/BTstackManager.h>
-#import <BTstack/BTDiscoveryViewController.h>
+#import <substrate.h>
+//#import <btstack/BTstackManager.h>
+#import <btstack/BTDiscoveryViewController.h>
 #import <btstack/hci_cmds.h>
 #import <btstack/BTDevice.h>
+#import <AddressBook/AddressBook.h>
 
 #import "inPulseProtocol.h"
 
@@ -17,6 +18,12 @@
 // address of watch
 bd_addr_t addr = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};	// inPulse
 
+typedef struct __CTCall * CTCallRef;
+CFStringRef CTCallCopyAddress(CFAllocatorRef alloc, CTCallRef call);
+ABRecordRef ABCFindPersonMatchingPhoneNumber(ABAddressBookRef addressBook, NSString *phoneNumber, int identifier, int uid);
+
+
+
 @implementation INAlertManager
 
 @synthesize connected;
@@ -29,7 +36,9 @@ int store_inpulse_string(char *dest, const char *string){
 }
 
 - (id) init {
+
 	self = [super init];
+
 	if(self) {
 		// BTstack
 		BTstackManager * bt = [BTstackManager sharedInstance];
@@ -42,9 +51,48 @@ int store_inpulse_string(char *dest, const char *string){
 		pendingAlerts = [[NSMutableArray alloc] init];
 		
 		preferenceManager = [[INPreferenceManager alloc] init];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(incomingCall:) name:@"kCTCallIdentificationChangeNotification" object:nil];
+        
+        
 	}
 	
 	return self;
+}
+-(void)incomingCall:(id)notification{
+
+    //retain the notification to prevent crashes
+    [[notification object] retain];
+    
+    //Get the callref from the notification
+    CTCallRef call=(CTCallRef)[notification object];
+    
+    NSString *number=(NSString *)CTCallCopyAddress(nil,call);
+    NSString *title=@"Incoming Call"; //maybe localize this;
+    NSString *callerName;
+    if (number){
+        ABAddressBookRef ab=ABAddressBookCreate();
+        ABRecordRef person=ABCFindPersonMatchingPhoneNumber(ab,number,0,0);
+        if (person){
+            NSString *firstName= (NSString *)ABRecordCopyValue(person, kABPersonFirstNameProperty);
+            NSString *lastName = (NSString *)ABRecordCopyValue(person, kABPersonLastNameProperty);
+            callerName = [NSString stringWithFormat:@"%@ %@",firstName,lastName];
+        }
+        CFRelease(ab);
+    }
+    INAlertData* data;  
+    data = [[[INAlertData alloc] init] autorelease];
+    data.time=[NSDate date];
+    data.status=kNewAlertForeground;
+    data.type=kPhoneAlert;
+    data.bundleID=@"com.apple.mobilephone";
+    data.header=title;
+
+    if (!number)
+        number=@"Private number";
+    data.text=callerName!=nil ? [NSString stringWithFormat:@"%@ %@",callerName,number] : number;
+    [self newAlertWithData :data];
+    
+    
 }
 
 // direct access
@@ -122,6 +170,7 @@ int store_inpulse_string(char *dest, const char *string){
 }
 
 -(void)newAlertWithData:(INAlertData *)data {
+    
 	if(!connected) {
 		if(![pendingAlerts containsObject:data]) {
 			[pendingAlerts addObject:data];

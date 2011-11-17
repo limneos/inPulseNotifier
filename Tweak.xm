@@ -28,8 +28,10 @@
  * It uses all of the same code to grab notifications from the system and
  * has been modified to work with the inpulse watch code.
  */
+#import <AddressBook/AddressBook.h>
 #import <SpringBoard/SpringBoard.h>
-#import <ChatKit/ChatKit.h>
+#import <BulletinBoard/BBBulletin.h>
+//#import <ChatKit/ChatKit.h>
 #import <objc/runtime.h>
 
 #import "INAlertData.h"
@@ -64,30 +66,110 @@
 //Alert Controller:
 INAlertManager *manager;
 
+// isOS5Check
+BOOL iOS5;
+
+// BulletinRequest handle
+NSString *seenBulletinID;
+
+
+
 //Hook into Springboard init method to initialize our window
 
 %hook SpringBoard
 
--(void)applicationDidFinishLaunching:(id)application
-{    
+-(void)applicationDidFinishLaunching:(id)notification{ 
     %orig;
 
 	INPreferenceManager *preferenceManager = [[[INPreferenceManager alloc] init] autorelease];
-	BOOL enabled = [[preferenceManager.preferences valueForKey:@"inpulseEnabled"] boolValue];
+
+	BOOL enabled = [preferenceManager.preferences valueForKey:@"inpulseEnabled"]  ? [[preferenceManager.preferences valueForKey:@"inpulseEnabled"] boolValue] : YES;
+
 	if(enabled) {
 		manager = [[INAlertManager alloc] init];
 		[manager connectToWatch];
 	}
 }
 
-- (void) dealloc {
-	[manager release];
-	manager = nil;
-	%orig;
-}
 
 %end;
 
+
+static INAlertData* managerDataFromBulletin(id bulletin){
+	if (seenBulletinID){
+		[seenBulletinID release];
+	}
+	seenBulletinID=[bulletin bulletinID];
+	[seenBulletinID retain];
+	INAlertData* data;  
+	data = [[INAlertData alloc] init] ;
+	data.time=[NSDate date];
+	data.status=kNewAlertForeground;
+	data.bundleID=[bulletin sectionID];
+	data.header=[[bulletin content] title];
+	data.text=[[bulletin content] message] ;
+	if ([[bulletin sectionID] isEqual:@"com.apple.MobileSMS"]){
+		data.type=kSMSAlert;
+	}	
+	else if ([[bulletin sectionID] isEqual:@"com.apple.mobilephone"]){
+		data.type=kPhoneAlert;
+	}	
+	else if ([[bulletin sectionID] isEqual:@"com.apple.MobileSMS"]){
+		data.type=kSMSAlert;
+	}	
+	else if ([[bulletin sectionID] isEqual:@"com.apple.mobilecal"]){
+		data.type=kCalendarAlert;
+	}
+	else{
+		data.type=kPushAlert;
+	}
+	return data;
+
+}
+
+
+%group iOS5Hooks
+%hook SBBulletinBannerController
+-(void)observer:(id)observer addBulletin:(id)bulletin forFeed:(unsigned)feed{
+	if (![seenBulletinID isEqual:[bulletin bulletinID]]){
+		INAlertData * data=[managerDataFromBulletin(bulletin) autorelease];
+		[manager newAlertWithData:data];
+	}
+	%orig;
+}
+%end
+%hook SBBulletinModalController
+-(void)observer:(id)observer addBulletin:(id)bulletin forFeed:(unsigned)feed{
+	if (![seenBulletinID isEqual:[bulletin bulletinID]]){
+		INAlertData * data=[managerDataFromBulletin(bulletin) autorelease];
+		[manager newAlertWithData:data];
+	}
+	%orig;
+}
+%end
+%hook SBAwayBulletinListController
+-(void)observer:(id)observer addBulletin:(id)bulletin forFeed:(unsigned)feed{
+	if (![seenBulletinID isEqual:[bulletin bulletinID]]){
+		INAlertData * data=[managerDataFromBulletin(bulletin) autorelease];
+		[manager newAlertWithData:data];
+	}
+	%orig;
+}
+%end
+%hook SBAlartItemsController
+-(void)observer:(id)observer addBulletin:(id)bulletin forFeed:(unsigned)feed{
+	if (![seenBulletinID isEqual:[bulletin bulletinID]]){
+		INAlertData * data=[managerDataFromBulletin(bulletin) autorelease];
+		[manager newAlertWithData:data];
+	}
+	%orig;
+}
+%end
+%end
+//iOS5 GROUPS END
+
+
+%group iOS4Hooks
 %hook SBAlertItemsController
 
 -(void)activateAlertItem:(id)item
@@ -122,7 +204,7 @@ INAlertManager *manager;
         
 		//Get the SBApplication object, we need its bundle identifier
 		SBApplication *app(MSHookIvar<SBApplication *>(item, "_app"));
-		//Filter out clock alerts
+		//Filter out cloalerts
 
 		NSString* _body = MSHookIvar<NSString*>(item, "_body");
 		data = [[[INAlertData alloc] init] autorelease];
@@ -169,6 +251,9 @@ INAlertManager *manager;
 }
 
 %end
+%end
+
+//iOS4 GROUP END
 
 %hook AutoFetchRequestPrivate
 
@@ -196,6 +281,8 @@ INAlertManager *manager;
 
 %end
 
+
+
 static void reloadPrefsNotification(CFNotificationCenterRef center,
 									void *observer,
 									CFStringRef name,
@@ -206,42 +293,18 @@ static void reloadPrefsNotification(CFNotificationCenterRef center,
 
 %ctor
 {
+	%init; // init all hooks outside groups
+	
+	iOS5=[NSFileManager instancesRespondToSelector:@selector(URLForUbiquityContainerIdentifier:)];
+	
+	if (iOS5){
+		%init(iOS5Hooks);
+	}
+	else{
+		%init(iOS4Hooks)
+	}
 	//Register for the preferences-did-change notification
 	CFNotificationCenterRef r = CFNotificationCenterGetDarwinNotifyCenter();
 	CFNotificationCenterAddObserver(r, NULL, &reloadPrefsNotification, CFSTR("com.brandontreb.inpulsenotifier/reloadPrefs"), NULL, 0);
 }
 
-/* How to Hook with Logos
-Hooks are written with syntax similar to that of an Objective-C @implementation.
-You don't need to #include <substrate.h>, it will be done automatically, as will
-the generation of a class list and an automatic constructor.
-
-%hook ClassName
-
-// Hooking a class method
-+ (id)sharedInstance {
-	return %orig;
-}
-
-// Hooking an instance method with an argument.
-- (void)messageName:(int)argument {
-	%log; // Write a message about this call, including its class, name and arguments, to the system log.
-
-	%orig; // Call through to the original function with its original arguments.
-	%orig(nil); // Call through to the original function with a custom argument.
-
-	// If you use %orig(), you MUST supply all arguments (except for self and _cmd, the automatically generated ones.)
-}
-
-// Hooking an instance method with no arguments.
-- (id)noArguments {
-	%log;
-	id awesome = %orig;
-	[awesome doSomethingElse];
-
-	return awesome;
-}
-
-// Always make sure you clean up after yourself; Not doing so could have grave consequences!
-%end
-*/

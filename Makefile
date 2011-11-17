@@ -1,14 +1,16 @@
-include $(THEOS)/makefiles/common.mk
+GO_EASY_ON_ME=1
+
+include theos/makefiles/common.mk
 
 TWEAK_NAME = inPulseNotifier
 
-inPulseNotifier_FILES = Tweak.xm BTstackManager.m BTDevice.m INPreferenceManager.m INAlertManager.m INAlertData.m
+inPulseNotifier_FILES = Tweak.xm BTStackManager.m BTDevice.m INPreferenceManager.m INAlertManager.m INAlertData.m
 SUBPROJECTS = settings
 
-include $(THEOS_MAKE_PATH)/tweak.mk
-inPulseNotifier_FRAMEWORKS = IOKit UIKit Foundation QuartzCore CoreGraphics
+include theos/makefiles/tweak.mk
+inPulseNotifier_FRAMEWORKS = CoreTelephony IOKit UIKit Foundation QuartzCore CoreGraphics AddressBook
 inPulseNotifier_CFLAGS = -Iinclude 
 inPulseNotifier_LDFLAGS = -lBTstack
 
 SUBPROJECTS = settings
-include $(FW_MAKEDIR)/aggregate.mk
+include theos/makefiles/aggregate.mk
