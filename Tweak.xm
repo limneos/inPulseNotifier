@@ -156,7 +156,7 @@ static INAlertData* managerDataFromBulletin(id bulletin){
 	%orig;
 }
 %end
-%hook SBAlartItemsController
+%hook SBAlertItemsController
 -(void)observer:(id)observer addBulletin:(id)bulletin forFeed:(unsigned)feed{
 	if (![seenBulletinID isEqual:[bulletin bulletinID]]){
 		INAlertData * data=[managerDataFromBulletin(bulletin) autorelease];
