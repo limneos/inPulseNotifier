@@ -60,6 +60,7 @@ int store_inpulse_string(char *dest, const char *string){
 }
 -(void)incomingCall:(id)notification{
 
+
     //retain the notification to prevent crashes
     [[notification object] retain];
     
@@ -68,17 +69,22 @@ int store_inpulse_string(char *dest, const char *string){
     
     NSString *number=(NSString *)CTCallCopyAddress(nil,call);
     NSString *title=@"Incoming Call"; //maybe localize this;
-    NSString *callerName;
+    NSString *callerName=nil;
+
+
     if (number){
         ABAddressBookRef ab=ABAddressBookCreate();
         ABRecordRef person=ABCFindPersonMatchingPhoneNumber(ab,number,0,0);
         if (person){
             NSString *firstName= (NSString *)ABRecordCopyValue(person, kABPersonFirstNameProperty);
             NSString *lastName = (NSString *)ABRecordCopyValue(person, kABPersonLastNameProperty);
-            callerName = [NSString stringWithFormat:@"%@ %@",firstName,lastName];
+            callerName = [[NSString stringWithFormat:@"%@ %@",firstName,lastName] retain];
+            CFRelease(person);
         }
         CFRelease(ab);
     }
+
+
     INAlertData* data;  
     data = [[[INAlertData alloc] init] autorelease];
     data.time=[NSDate date];
@@ -89,10 +95,13 @@ int store_inpulse_string(char *dest, const char *string){
 
     if (!number)
         number=@"Private number";
+  
     data.text=callerName!=nil ? [NSString stringWithFormat:@"%@ %@",callerName,number] : number;
-    [self newAlertWithData :data];
-    
-    
+    [self newAlertWithData :data ];
+    [[notification object] release];
+    [callerName release];
+
+
 }
 
 // direct access
