@@ -16,7 +16,7 @@ d) A function called managerDataFromBulletin creates the required data for the m
 
 a) an NSNotification observer is added to the init method, registering for incoming call notifications.
 
-b) a new method, incomingCall:, the notification's delegate is added to INAlertManager, that handles the incoming call and creates caller info data for the manager and then passes it to self.
+b) a new method, incomingCall:, the notification handler, is added to INAlertManager, that handles the incoming call and creates caller info data for the manager and then passes it to self.
 
 3) Makefile
 ---
